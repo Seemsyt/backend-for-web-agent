@@ -1,0 +1,75 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+
+# Environment variables (IMPORTANT)
+.env
+.env.*
+*.env
+
+# Logs
+*.log
+logs/
+
+# Python build files
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# LangGraph / temporary workflow outputs
+.checkpoints/
+.graph_cache/
+.cache/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.vscode/
+.idea/
+
+# Testing / coverage
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Mypy
+.mypy_cache/
+
+# Pyright
+.pyright/
+
+# Ruff / lint cache
+.ruff_cache/
+
+# Node (if frontend inside same repo)
+node_modules/
+
+# Next.js / frontend build
+.next/
+out/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# Database files
+*.sqlite3
+*.db
+chatbot.db-shm
+chatbot.db-wal
