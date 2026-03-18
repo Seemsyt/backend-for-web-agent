@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage,AIMessage
 import uuid
-
+import sqlite3
 from graph import workflow, checkpointer
 
 app = FastAPI()
@@ -81,7 +81,7 @@ def stream_chat(message: str, thread_id: str):
         config=config,
         stream_mode="messages",
     ):
-        if chunk.content:
+        if isinstance(chunk,AIMessage):
             yield chunk.content
 
 @app.post("/chat-stream")
