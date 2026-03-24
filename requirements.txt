@@ -1,6 +1,6 @@
 aiohttp
 faiss-cpu
-fastapi
+fastapi[standard]
 huggingface_hub
 langchain
 langchain-classic
