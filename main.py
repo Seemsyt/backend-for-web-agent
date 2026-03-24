@@ -7,9 +7,19 @@ from pydantic import BaseModel
 from langchain_core.messages import HumanMessage,AIMessage
 import uuid
 import sqlite3
-from graph import workflow, checkpointer
-
+from graph import build_workflow
 app = FastAPI()
+workflow = None
+checkpointer_gen = None
+checkpointer = None
+@app.on_event("startup")
+async def startup():
+    global workflow
+    global checkpointer_gen
+    global checkpointer
+    workflow, checkpointer, checkpointer_gen = await build_workflow()
+
+
 
 # CORS
 app.add_middleware(
@@ -27,18 +37,27 @@ class ChatRequest(BaseModel):
 
 # fetch full chat messages for a thread
 @app.get("/messages")
-def get_thread_messages(thread_id: str):
+async def get_thread_messages(thread_id: str):
     config = {"configurable": {"thread_id": thread_id}}
-    state = workflow.get_state(config=config)
+
+    state = await workflow.aget_state(config=config)
     messages = state.values.get("messages", [])
 
     result = []
     for msg in messages:
         role = getattr(msg, "type", "unknown")
-        content = getattr(msg, "content", "")
-        result.append({"role": role, "content": content})
-    return result
 
+        # ❌ skip tool messages
+        if role == "tool":
+            continue
+
+        content = getattr(msg, "content", "")
+        result.append({
+            "role": role,
+            "content": content
+        })
+
+    return result
 # fetch all threads with first message as title
 @app.get("/all/threads")
 @app.get("/all/threads")
@@ -76,22 +95,32 @@ def all_threads():
     return threads
 
 # stream chat response
-def stream_chat(message: str, thread_id: str):
+async def stream_chat(message: str, thread_id: str):
     config = {"configurable": {"thread_id": thread_id}}
-    DB_URL=os.getenv('URL')
-    with PostgresSaver.from_conn_string(DB_URL) as checkpointer:
-        checkpointer.setup()
-        for chunk, metadata in workflow.stream(
-            {"messages": [HumanMessage(content=message)]},
-            config=config,
-            stream_mode="messages",
-        ):
-            if isinstance(chunk,AIMessage):
+
+    async for event in workflow.astream_events(
+        {"messages": [HumanMessage(content=message)]},
+        config=config,
+        version="v1"
+    ):
+        event_type = event.get("event")
+
+        # ✅ stream tokens
+        if event_type == "on_chat_model_stream":
+            chunk = event.get("data", {}).get("chunk")
+
+            if chunk and getattr(chunk, "content", None):
                 yield chunk.content
-        return thread_id
+
+        # ✅ structured tool events (optional but better)
+        elif event_type == "on_tool_start":
+            yield f"\n[TOOL START: {event.get('name')}]\n"
+
+        elif event_type == "on_tool_end":
+            yield f"\n[TOOL END: {event.get('name')}]\n"
 
 @app.post("/chat-stream")
-def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id or str(uuid.uuid4())
     headers = {"X-Thread-Id": thread_id}
     print(headers)

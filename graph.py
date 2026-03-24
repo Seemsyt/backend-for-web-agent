@@ -1,4 +1,4 @@
-import time
+import time,asyncio
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated
 from langchain_core.messages import (
@@ -7,7 +7,7 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
 )
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langchain_openai import ChatOpenAI
 from langgraph.graph.message import add_messages
 from langchain_tavily import TavilySearch
@@ -326,26 +326,28 @@ tool_node = ToolNode(tools)
 # -----------------------------
 # SQLite Memory
 # -----------------------------
-DB_URL = os.getenv("URL")
-checkpointer_gen = PostgresSaver.from_conn_string(DB_URL)
-checkpointer = checkpointer_gen.__enter__()
+import os
+from langgraph.graph import StateGraph
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
+async def build_workflow():
+    DB_URL = os.getenv("URL")
 
-graph = StateGraph(ChatState)
+    checkpointer_gen = AsyncPostgresSaver.from_conn_string(DB_URL)
+    checkpointer = await checkpointer_gen.__aenter__()
 
-graph.add_node("chat_node", chat_node)
-graph.add_node("tools", tool_node)
+    graph = StateGraph(ChatState)
 
-graph.add_edge(START, "chat_node")
+    graph.add_node("chat_node", chat_node)
+    graph.add_node("tools", tool_node)
 
-graph.add_conditional_edges(
-    "chat_node",
-    tools_condition
-)
+    graph.add_edge(START, "chat_node")
+    graph.add_conditional_edges("chat_node", tools_condition)
+    graph.add_edge("tools", "chat_node")
 
-graph.add_edge("tools", "chat_node")
+    workflow = graph.compile(checkpointer=checkpointer)
 
-workflow = graph.compile(checkpointer=checkpointer)
+    return workflow, checkpointer, checkpointer_gen
 
 
 
