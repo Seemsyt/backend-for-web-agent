@@ -19,7 +19,6 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import FastEmbedEmbeddings
 from huggingface_hub import login
 
 # -----------------------------
@@ -27,6 +26,55 @@ from huggingface_hub import login
 # -----------------------------
 
 load_dotenv()
+
+from openai import OpenAI
+import time
+
+from langchain_core.embeddings import Embeddings
+from openai import OpenAI
+import os
+import time
+
+class OpenRouterVLembeddings(Embeddings):
+    def __init__(self, model):
+        self.client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+        )
+        self.model = model
+
+    def embed_query(self, text: str):
+        for _ in range(3):
+            try:
+                res = self.client.embeddings.create(
+                    model=self.model,
+                    input=[{
+                        "content": [{"type": "text", "text": text}]
+                    }],
+                    encoding_format="float"
+                )
+                return res.data[0].embedding
+            except Exception as e:
+                print("Retrying query...", e)
+                time.sleep(2)
+        raise Exception("Embedding failed")
+
+    def embed_documents(self, texts: list[str]):
+        for _ in range(3):
+            try:
+                res = self.client.embeddings.create(
+                    model=self.model,
+                    input=[
+                        {"content": [{"type": "text", "text": t}]}
+                        for t in texts
+                    ],
+                    encoding_format="float"
+                )
+                return [d.embedding for d in res.data]
+            except Exception as e:
+                print("Retrying batch...", e)
+                time.sleep(2)
+        raise Exception("Batch embedding failed")
 
 # -----------------------------
 # 1. LOAD BOOKS
@@ -43,7 +91,9 @@ def clean_text(text:str):
     text = re.sub(r"\s+"," ",text)
     return text
 docs = []
-embeddings = FastEmbedEmbeddings()
+embeddings = OpenRouterVLembeddings(
+    "nvidia/llama-nemotron-embed-vl-1b-v2:free"
+)
 if os.path.exists(INDEX_PATH):
     print('loading index path')
     vector_store = FAISS.load_local(
@@ -177,16 +227,16 @@ class ChatState(TypedDict):
 
     
 
-# @tool
-# def Rag(query: str, book: str = None):
-#     """RAG tool for ML & Math books"""
-#     retriever = get_retreiver(book)
-#     results = retriever.invoke(query)
+@tool
+def Rag(query: str, book: str = None):
+    """RAG tool for ML & Math books"""
+    retriever = get_retreiver(book)
+    results = retriever.invoke(query)
 
-#     return "\n\n".join(
-#     f"Source: {doc.metadata.get('book')}\n{doc.page_content}"
-#     for doc in results
-# )
+    return "\n\n".join(
+    f"Source: {doc.metadata.get('book')}\n{doc.page_content}"
+    for doc in results
+)
 
 search_tool = TavilySearch(
     max_results=5,
@@ -218,7 +268,7 @@ def coding_agent(prompt: str) -> str:
     return response.content
 
 
-tools = [coding_agent,search_tool]
+tools = [coding_agent,search_tool,Rag]
 
 
 # -----------------------------

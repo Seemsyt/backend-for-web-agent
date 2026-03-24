@@ -14,4 +14,4 @@ psycopg2-binary
 psycopg[binary,pool]
 langgraph
 langgraph-checkpoint-postgres
-fastembed
+
