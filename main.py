@@ -110,7 +110,7 @@ async def stream_chat(message: str, thread_id: str):
             chunk = event.get("data", {}).get("chunk")
 
             if chunk and getattr(chunk, "content", None):
-                yield chunk.content
+                yield f"data: {chunk.content}\n\n"
 
         # ✅ structured tool events (optional but better)
         elif event_type == "on_tool_start":
@@ -124,11 +124,12 @@ async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id or str(uuid.uuid4())
     headers = {"X-Thread-Id": thread_id,
                "Cache-Control": "no-cache",
-            "Connection": "keep-alive",}
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",}
     print(headers)
 
     return StreamingResponse(
         stream_chat(request.message, thread_id),
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers=headers,
     )
