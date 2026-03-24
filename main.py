@@ -122,7 +122,9 @@ async def stream_chat(message: str, thread_id: str):
 @app.post("/chat-stream")
 async def chat_stream(request: ChatRequest):
     thread_id = request.thread_id or str(uuid.uuid4())
-    headers = {"X-Thread-Id": thread_id}
+    headers = {"X-Thread-Id": thread_id,
+               "Cache-Control": "no-cache",
+            "Connection": "keep-alive",}
     print(headers)
 
     return StreamingResponse(
