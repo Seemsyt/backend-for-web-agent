@@ -4,7 +4,7 @@ from .db import Base
 from datetime import datetime,timezone
 class UserSchema(Base):
     __tablename__ = 'Users'
-    id:Mapped[str] = mapped_column(Integer,index=True,autoincrement=True,primary_key=True,unique=True)
+    id:Mapped[int] = mapped_column(Integer,index=True,autoincrement=True,primary_key=True,unique=True)
     username:Mapped[str] = mapped_column(VARCHAR(100),nullable=False,unique=True)
     email:Mapped[str] = mapped_column(String,nullable=False,unique=True)
     password:Mapped[str] = mapped_column(String,nullable=False)
