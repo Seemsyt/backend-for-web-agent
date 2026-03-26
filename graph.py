@@ -230,13 +230,28 @@ class ChatState(TypedDict):
 @tool
 def Rag(query: str, book: str = None):
     """RAG tool for ML & Math books"""
-    retriever = get_retreiver(book)
-    results = retriever.invoke(query)
+    try:
+        if not vector_store:
+            return "ERROR: FAISS index not loaded. Please ensure books are available."
+        
+        retriever = get_retreiver(book)
+        if not retriever:
+            return "ERROR: Could not create retriever."
+        
+        results = retriever.invoke(query)
+        
+        if not results:
+            return "No relevant documents found in the knowledge base."
 
-    return "\n\n".join(
-    f"Source: {doc.metadata.get('book')}\n{doc.page_content}"
-    for doc in results
-)
+        return "\n\n".join(
+            f"Source: {doc.metadata.get('book')}\n{doc.page_content}"
+            for doc in results
+        )
+    except Exception as e:
+        print(f"❌ RAG Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"ERROR in RAG: {str(e)}"
 
 search_tool = TavilySearch(
     max_results=5,
@@ -264,8 +279,16 @@ def coding_agent(prompt: str) -> str:
 - Use search tool for latest information.
 - Use coding_agent for programming tasks.
     """
-    response = coding_llm.invoke([HumanMessage(content=prompt)])
-    return response.content
+    try:
+        response = coding_llm.invoke([HumanMessage(content=prompt)])
+        if not response or not response.content:
+            return "ERROR: No response from coding agent"
+        return response.content
+    except Exception as e:
+        print(f"❌ Coding Agent Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"ERROR in coding agent: {str(e)}"
 
 
 tools = [coding_agent,search_tool,Rag]
@@ -295,11 +318,16 @@ agent = llm.bind_tools(tools)
 # -----------------------------
 
 def chat_node(state: ChatState):
+    try:
+        messages = state["messages"]
+        
+        if not messages:
+            return {
+                "messages": [AIMessage(content="No messages provided")]
+            }
 
-    messages = state["messages"]
-
-    system_prompt = SystemMessage(
-        content="""
+        system_prompt = SystemMessage(
+            content="""
 You are a helpful AI assistant.
 
 Rules:
@@ -307,13 +335,25 @@ Rules:
 - Use coding_agent for programming tasks.
 - Answer normally if no tool is required.
 """
-    )
+        )
 
-    response = agent.invoke([system_prompt] + messages)
+        response = agent.invoke([system_prompt] + messages)
+        
+        if not response:
+            return {
+                "messages": [AIMessage(content="ERROR: No response from agent")]
+            }
 
-    return {
-        "messages": [response]
-    }
+        return {
+            "messages": [response]
+        }
+    except Exception as e:
+        print(f"❌ Chat Node Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "messages": [AIMessage(content=f"ERROR: {str(e)}")]
+        }
 
 
 # -----------------------------
@@ -333,8 +373,18 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 async def build_workflow():
     DB_URL = os.getenv("URL")
 
+    print("📊 Initializing checkpointer...")
     checkpointer_gen = AsyncPostgresSaver.from_conn_string(DB_URL)
     checkpointer = await checkpointer_gen.__aenter__()
+    
+    # ✅ CRITICAL: Ensure tables are created
+    print("📝 Creating checkpoint tables if they don't exist...")
+    try:
+        await checkpointer.setup()
+        print("✅ Checkpoint tables ready")
+    except Exception as e:
+        print(f"⚠️  Could not auto-setup tables: {e}")
+        print("   (Tables may already exist or will be created on first write)")
 
     graph = StateGraph(ChatState)
 
@@ -347,6 +397,7 @@ async def build_workflow():
 
     workflow = graph.compile(checkpointer=checkpointer)
 
+    print("✅ Workflow compiled successfully")
     return workflow, checkpointer, checkpointer_gen
 
 
