@@ -15,6 +15,7 @@ class UserSchema(Base):
 class ThreadShema(Base):
     __tablename__ = "Chats"
     id:Mapped[str] = mapped_column(String,primary_key=True,unique=True)
+    title:Mapped[str] = mapped_column(String,unique=False,nullable=True)
     user:Mapped[int] = mapped_column(Integer,ForeignKey("Users.id",ondelete='CASCADE'))
     created_at:Mapped[datetime] = mapped_column(DateTime,default=datetime.now(timezone.utc))
     updated_at:Mapped[datetime] = mapped_column(DateTime,default=datetime.now(timezone.utc),onupdate=datetime.now(timezone.utc))

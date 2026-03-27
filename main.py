@@ -91,8 +91,7 @@ async def get_thread_messages(
         role = getattr(msg, "type", "unknown")
 
         # ❌ skip tool messages
-        if role == "tool":
-            continue
+        
 
         content = getattr(msg, "content", "")
         result.append({
@@ -134,7 +133,7 @@ def all_threads(
         messages = channel_values.get("messages", [])
 
         title = "New Chat"
-
+        
         for m in messages:
             msg_type = getattr(m, "type", None)
             content = getattr(m, "content", "")
@@ -166,7 +165,7 @@ async def stream_chat(message: str, thread_id: str):
         async for event in workflow.astream_events(
             {"messages": [HumanMessage(content=message)]},
             config=config,
-            version="v1"
+            version="v2"
         ):
             event_type = event["event"]
 
@@ -215,7 +214,7 @@ async def chat_stream(
         thread_id = str(uuid.uuid4())
 
         # ✅ Create new thread
-        new_thread = ThreadShema(id=thread_id, user=user.id)
+        new_thread = ThreadShema(id=thread_id, user=user.id,title=request.message)
         db.add(new_thread)
         db.commit()
         db.refresh(new_thread)
